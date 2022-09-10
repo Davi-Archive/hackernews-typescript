@@ -1,5 +1,20 @@
-import { extendType, objectType, nonNull, stringArg } from "nexus";
-import { NexusGenObjects } from "../../nexus-typegen";
+import { extendType, nonNull, objectType, stringArg, intArg, inputObjectType, enumType, arg, list } from "nexus";
+import { Prisma } from "@prisma/client"
+
+export const LinkOrderByInput = inputObjectType({
+    name: "LinkOrderByInput",
+    definition(t) {
+        t.field("description", { type: Sort });
+        t.field("url", { type: Sort });
+        t.field("createdAt", { type: Sort });
+    }
+})
+
+export const Sort = enumType({
+    name: "Sort",
+    members: ["asc", "desc"]
+})
+
 
 export const Link = objectType({
     name: "Link", // 1
@@ -31,9 +46,40 @@ export const LinkQuery = extendType({
     type: "Query",
     definition(t) {
         t.nonNull.list.nonNull.field("feed", {
-            type: "Link",
-            resolve(parent, args, context, info) {
-                return context.prisma.link.findMany();
+            type: "Feed",
+            args: {
+                filter: stringArg(),
+                skip: intArg(),
+                take: intArg(),
+                orderBy: arg({ type: list(nonNull(LinkOrderByInput)) }),
+            },
+            async resolve(parent, args, context, info) {
+                const where = args.filter
+                    ? {
+                        OR: [
+                            { description: { contains: args.filter } },
+                            { url: { contains: args.filter } },
+                        ]
+                    }
+                    : {};
+
+                const links = await context.prisma.link.findMany({
+                    where,
+                    skip: args?.skip as number | undefined,
+                    take: args?.take as number | undefined,
+                    orderBy: args?.orderBy as
+                        | Prisma.Enumerable<Prisma.LinkOrderByWithRelationInput>
+                        | undefined,
+                });
+
+                const count = await context.prisma.link.count({ where });  // 2
+                const id = `main-feed:${JSON.stringify(args)}`;  // 3
+
+                return {  // 4
+                    links,
+                    count,
+                    id,
+                };
             }
         })
     }
@@ -67,5 +113,14 @@ export const LinkMutation = extendType({
                 return newLink;
             },
         });
+    },
+});
+
+export const Feed = objectType({
+    name: "Feed",
+    definition(t) {
+        t.nonNull.list.nonNull.field("links", { type: Link }); // 1
+        t.nonNull.int("count"); // 2
+        t.id("id");  // 3
     },
 });
