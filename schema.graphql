@@ -15,3 +15,10 @@ type Mutation {
 type Query {
   feed: [Link!]!
 }
+
+type User {
+  email: String!
+  id: Int!
+  links: [Link!]!
+  name: String!
+}
